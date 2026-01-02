@@ -1,0 +1,219 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+    font-family: grotesk;
+    src: url(./assets/FoundersGrotesk-Semibold.ttf);
+}
+@font-face {
+    font-family: nmontreal;
+    src: url(./assets/NeueMontreal-Regular.ttf);
+}
+
+@layer base {
+  :root {
+    /* Environmental NGO Theme - Forest & Earth */
+    --background: 210 20% 98%;
+    --foreground: 160 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 30% 10%;
+
+    /* Forest Green Primary */
+    --primary: 158 64% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Earth/Sand Secondary */
+    --secondary: 35 40% 92%;
+    --secondary-foreground: 35 50% 25%;
+
+    --muted: 210 15% 94%;
+    --muted-foreground: 210 10% 45%;
+
+    /* Teal Accent */
+    --accent: 174 60% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 15%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 210 20% 88%;
+    --input: 210 20% 88%;
+    --ring: 158 64% 32%;
+
+    --radius: 0.75rem;
+
+    /* Custom Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(160 30% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(160 30% 10% / 0.08), 0 2px 4px -2px hsl(160 30% 10% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(160 30% 10% / 0.1), 0 4px 6px -4px hsl(160 30% 10% / 0.05);
+    --shadow-glow: 0 0 20px hsl(158 64% 32% / 0.15);
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(158 64% 32%) 0%, hsl(174 60% 45%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(35 50% 50%) 0%, hsl(25 70% 55%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
+
+    --sidebar-background: 160 30% 12%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 158 64% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 160 25% 18%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 160 20% 20%;
+    --sidebar-ring: 158 64% 52%;
+  }
+
+  .dark {
+    --background: 160 30% 6%;
+    --foreground: 210 20% 95%;
+
+    --card: 160 25% 10%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 160 25% 10%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 158 64% 52%;
+    --primary-foreground: 160 30% 5%;
+
+    --secondary: 160 20% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 160 20% 15%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 174 60% 50%;
+    --accent-foreground: 160 30% 5%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 70% 50%;
+    --success-foreground: 142 70% 10%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 38 92% 10%;
+    --info: 199 89% 55%;
+    --info-foreground: 199 89% 10%;
+
+    --border: 160 20% 20%;
+    --input: 160 20% 20%;
+    --ring: 158 64% 52%;
+
+    --sidebar-background: 160 30% 5%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 158 64% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 160 25% 12%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 160 20% 15%;
+    --sidebar-ring: 158 64% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-warm {
+    background: var(--gradient-warm);
+  }
+
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-sm;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50 transition-colors;
+}
