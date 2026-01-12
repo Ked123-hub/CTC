@@ -1,23 +1,38 @@
-import { db } from "../db/index.js";
-import { inventoryTable, inventoryLogsTable } from "../models/index.js";
+import { Inventory } from "../models/index.js";
 
-export const createInventoryItem = (data) =>
-  db.insert(inventoryTable).values(data).returning();
+export const createInventoryItem = async (data) => {
+  const inventoryItem = new Inventory(data);
+  await inventoryItem.save();
+  return inventoryItem;
+};
 
-export const getProjectInventory = (projectId) =>
-  db
-    .select()
-    .from(inventoryTable)
-    .where(inventoryTable.projectId.eq(projectId));
+export const getProjectInventory = async (projectId) => {
+  const inventory = await Inventory.find({ projectId }).sort({ createdAt: -1 });
+  return inventory;
+};
 
-export const logInventoryChange = (data, workerId) =>
-  db
-    .insert(inventoryLogsTable)
-    .values({ ...data, workerId })
-    .returning();
+export const logInventoryChange = async (data, workerId) => {
+  const inventoryItem = await Inventory.findById(data.inventoryId);
+  if (!inventoryItem) {
+    throw new Error("Inventory item not found");
+  }
 
-export const getInventoryLogs = (inventoryId) =>
-  db
-    .select()
-    .from(inventoryLogsTable)
-    .where(inventoryLogsTable.inventoryId.eq(inventoryId));
+  // Add log entry to inventory item
+  inventoryItem.logs.push({
+    ...data,
+    workerId,
+    changedAt: new Date(),
+  });
+
+  await inventoryItem.save();
+  return inventoryItem.logs[inventoryItem.logs.length - 1];
+};
+
+export const getInventoryLogs = async (inventoryId) => {
+  const inventoryItem = await Inventory.findById(inventoryId).select('logs');
+  if (!inventoryItem) {
+    throw new Error("Inventory item not found");
+  }
+
+  return inventoryItem.logs;
+};

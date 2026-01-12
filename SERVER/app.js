@@ -6,6 +6,7 @@ import {
   authLimiter,
   errorHandler,
 } from "./middlewares/index.js";
+import { connectDB } from "./db/index.js";
 import { initRedis } from "./services/redis.service.js";
 import authRoutes from "./routes/auth.routes.js";
 import workerRoutes from "./routes/workers.routes.js";
@@ -56,28 +57,38 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 
-// Initialize Redis and start server
+// Initialize MongoDB and Redis, then start server
 (async () => {
   try {
-    await initRedis();
-    console.log("✅ Redis initialized successfully");
-  } catch (error) {
-    console.warn("⚠️ Redis initialization warning:", error.message);
-    console.log("Server will continue without Redis caching");
-  }
+    // Connect to MongoDB
+    await connectDB();
+    console.log("✅ MongoDB connected successfully");
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
-    console.log(`✅ Server accessible on all network interfaces at port ${PORT}`);
-    console.log(`📊 Analytics API: http://localhost:${PORT}/api/analytics`);
-    console.log(
-      `📍 Location Tracking API: http://localhost:${PORT}/api/location`
-    );
-    console.log(
-      `🔔 Notifications API: http://localhost:${PORT}/api/notifications`
-    );
-    console.log(`📤 Export API: http://localhost:${PORT}/api/export`);
-  });
+    // Initialize Redis (optional, for caching)
+    try {
+      await initRedis();
+      console.log("✅ Redis initialized successfully");
+    } catch (redisError) {
+      console.warn("⚠️ Redis initialization warning:", redisError.message);
+      console.log("Server will continue without Redis caching");
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Server running on http://localhost:${PORT}`);
+      console.log(`✅ Server accessible on all network interfaces at port ${PORT}`);
+      console.log(`📊 Analytics API: http://localhost:${PORT}/api/analytics`);
+      console.log(
+        `📍 Location Tracking API: http://localhost:${PORT}/api/location`
+      );
+      console.log(
+        `🔔 Notifications API: http://localhost:${PORT}/api/notifications`
+      );
+      console.log(`📤 Export API: http://localhost:${PORT}/api/export`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
 })();
 
 export default app;

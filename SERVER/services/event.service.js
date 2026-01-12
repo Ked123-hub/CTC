@@ -1,14 +1,28 @@
-import { db } from "../db/index.js";
-import { eventsTable } from "../models/index.js";
+import { Event } from "../models/index.js";
 
-export const createEvent = (data) =>
-  db.insert(eventsTable).values(data).returning();
+export const createEvent = async (data) => {
+  const event = new Event(data);
+  await event.save();
+  return event;
+};
 
-export const getProjectEvents = (projectId) =>
-  db.select().from(eventsTable).where(eventsTable.projectId.eq(projectId));
+export const getProjectEvents = async (projectId) => {
+  const events = await Event.find({ projectId }).sort({ createdAt: -1 });
+  return events;
+};
 
-export const updateEvent = (id, data) =>
-  db.update(eventsTable).set(data).where(eventsTable.id.eq(id)).returning();
+export const updateEvent = async (id, data) => {
+  const updated = await Event.findByIdAndUpdate(id, data, { new: true });
+  if (!updated) {
+    throw new Error("Event not found");
+  }
+  return updated;
+};
 
-export const deleteEvent = (id) =>
-  db.delete(eventsTable).where(eventsTable.id.eq(id));
+export const deleteEvent = async (id) => {
+  const deleted = await Event.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new Error("Event not found");
+  }
+  return deleted;
+};

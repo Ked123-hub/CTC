@@ -1,58 +1,138 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  timestamp,
-  integer,
-  jsonb,
-} from "drizzle-orm/pg-core";
-import { projectsTable } from "./project.model.js";
-import { workersTable } from "./worker.model.js";
+import mongoose from "mongoose";
 
-export const tasksTable = pgTable("tasks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id").references(() => projectsTable.id),
-  title: varchar("title", { length: 200 }).notNull(),
-  description: text("description"),
-  category: varchar("category", { length: 100 }),
-  priority: varchar("priority", { length: 30 }).default("MEDIUM"),
-  plannedStart: timestamp("planned_start", { withTimezone: true }),
-  plannedEnd: timestamp("planned_end", { withTimezone: true }),
-  status: varchar("status", { length: 30 }).default("BACKLOG"),
-  requiredSkills: jsonb("required_skills").default("[]"),
-  // ["Sorting", "Collection"]
-  createdBy: uuid("created_by").references(() => workersTable.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+const { Schema } = mongoose;
+
+// Task Assignment Sub-schema
+const taskAssignmentSchema = new Schema({
+  workerId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Worker',
+    required: true
+  },
+  roleOnTask: {
+    type: String,
+    maxlength: 50,
+    trim: true
+  },
+  allocationPercent: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  assignedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: true });
+
+// Task Update Sub-schema
+const taskUpdateSchema = new Schema({
+  workerId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Worker',
+    required: true
+  },
+  note: {
+    type: String,
+    trim: true
+  },
+  progressPercent: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  attachmentUrl: {
+    type: String,
+    maxlength: 255
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: true });
+
+// Main Task Schema
+const taskSchema = new Schema({
+  projectId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Project',
+    required: true
+  },
+  title: {
+    type: String,
+    required: true,
+    maxlength: 200,
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  category: {
+    type: String,
+    maxlength: 100,
+    trim: true
+  },
+  priority: {
+    type: String,
+    enum: ["LOW", "MEDIUM", "HIGH"],
+    default: "MEDIUM"
+  },
+  plannedStart: {
+    type: Date
+  },
+  plannedEnd: {
+    type: Date
+  },
+  status: {
+    type: String,
+    enum: ["BACKLOG", "IN_PROGRESS", "DONE", "BLOCKED"],
+    default: "BACKLOG"
+  },
+  requiredSkills: {
+    type: [String],
+    default: []
+  },
+  createdBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Worker',
+    required: true
+  },
+  // Embedded assignments and updates
+  assignments: [taskAssignmentSchema],
+  updates: [taskUpdateSchema]
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-export const taskAssignmentsTable = pgTable("task_assignments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  taskId: uuid("task_id")
-    .notNull()
-    .references(() => tasksTable.id),
-  workerId: uuid("worker_id")
-    .notNull()
-    .references(() => workersTable.id),
-  roleOnTask: varchar("role_on_task", { length: 50 }),
-  allocationPercent: integer("allocation_percent"),
-  assignedAt: timestamp("assigned_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+// Add indexes for common queries
+taskSchema.index({ projectId: 1 });
+taskSchema.index({ status: 1 });
+taskSchema.index({ priority: 1 });
+taskSchema.index({ createdBy: 1 });
+taskSchema.index({ requiredSkills: 1 });
+taskSchema.index({ plannedStart: 1, plannedEnd: 1 });
+
+// Virtual for task duration in days
+taskSchema.virtual('durationDays').get(function() {
+  if (this.plannedStart && this.plannedEnd) {
+    return Math.ceil((this.plannedEnd - this.plannedStart) / (1000 * 60 * 60 * 24));
+  }
+  return null;
 });
 
-export const taskUpdatesTable = pgTable("task_updates", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  taskId: uuid("task_id")
-    .notNull()
-    .references(() => tasksTable.id),
-  workerId: uuid("worker_id")
-    .notNull()
-    .references(() => workersTable.id),
-  note: text("note"),
-  progressPercent: integer("progress_percent"),
-  attachmentUrl: varchar("attachment_url", { length: 255 }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+// Virtual for completion percentage based on updates
+taskSchema.virtual('currentProgress').get(function() {
+  if (this.updates && this.updates.length > 0) {
+    // Get the latest progress update
+    const latestUpdate = this.updates.sort((a, b) => b.createdAt - a.createdAt)[0];
+    return latestUpdate.progressPercent || 0;
+  }
+  return 0;
 });
+
+const Task = mongoose.model('Task', taskSchema);
+
+export default Task;

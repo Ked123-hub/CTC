@@ -1,12 +1,4 @@
-import { db } from "../db/index.js";
-import {
-  attendanceTable,
-  tasksTable,
-  workersTable,
-  projectsTable,
-  dailyReportsTable,
-} from "../models/index.js";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { Attendance, Task, Worker, Project, DailyReport } from "../models/index.js";
 
 /**
  * Export Service for Data Export (CSV, JSON)
@@ -47,32 +39,50 @@ export const exportService = {
   },
 
   /**
-   * Export attendanceTable data as CSV
+   * Export attendance data as CSV
    */
   exportAttendanceCSV: async (projectId, startDate, endDate) => {
-    const data = await db
-      .select({
-        workerId: attendanceTable.workerId,
-        workerName: db.sql`CONCAT(${workersTable.firstname}, ' ', ${workersTable.lastname})`,
-        checkInTime: attendanceTable.checkInAt,
-        checkOutTime: attendanceTable.checkOutAt,
-        checkInLat: attendanceTable.checkInLat,
-        checkInLon: attendanceTable.checkInLng,
-        checkOutLat: attendanceTable.checkOutLat,
-        checkOutLon: attendanceTable.checkOutLng,
-        status: attendanceTable.status,
-        method: attendanceTable.method,
-      })
-      .from(attendanceTable)
-      .leftJoin(workersTable, eq(attendanceTable.workerId, workersTable.id))
-      .where(
-        and(
-          eq(attendanceTable.projectId, projectId),
-          gte(attendanceTable.checkInAt, startDate),
-          lte(attendanceTable.checkInAt, endDate)
-        )
-      )
-      .orderBy(attendanceTable.checkInAt);
+    const data = await Attendance.aggregate([
+      {
+        $match: {
+          projectId: projectId,
+          checkInAt: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "workers",
+          localField: "workerId",
+          foreignField: "_id",
+          as: "worker",
+        },
+      },
+      {
+        $unwind: "$worker",
+      },
+      {
+        $project: {
+          workerId: "$workerId",
+          workerName: {
+            $concat: ["$worker.firstname", " ", "$worker.lastname"],
+          },
+          checkInTime: "$checkInAt",
+          checkOutTime: "$checkOutAt",
+          checkInLat: "$checkInLat",
+          checkInLon: "$checkInLng",
+          checkOutLat: "$checkOutLat",
+          checkOutLon: "$checkOutLng",
+          status: "$status",
+          method: "$method",
+        },
+      },
+      {
+        $sort: { checkInTime: 1 },
+      },
+    ]);
 
     const headers = [
       "workerId",
@@ -89,35 +99,21 @@ export const exportService = {
 
     const csv = exportService.convertToCSV(data, headers);
     return {
-      filename: `attendance_${projectId}_${
-        startDate.toISOString().split("T")[0]
-      }.csv`,
+      filename: `attendance_${projectId}_${startDate.toISOString().split("T")[0]}.csv`,
       content: csv,
     };
   },
 
   /**
-   * Export tasksTable as CSV
+   * Export tasks as CSV
    */
   exportTasksCSV: async (projectId) => {
-    const data = await db
-      .select({
-        id: tasksTable.id,
-        title: tasksTable.title,
-        description: tasksTable.description,
-        status: tasksTable.status,
-        priority: tasksTable.priority,
-        progress: tasksTable.progress,
-        startDate: tasksTable.startDate,
-        endDate: tasksTable.endDate,
-        createdAt: tasksTable.createdAt,
-      })
-      .from(tasksTable)
-      .where(eq(tasksTable.projectId, projectId))
-      .orderBy(tasksTable.createdAt);
+    const data = await Task.find({ projectId })
+      .select("title description status priority progress startDate endDate createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
 
     const headers = [
-      "id",
       "title",
       "description",
       "status",
@@ -139,48 +135,82 @@ export const exportService = {
    * Export daily reports as JSON
    */
   exportReportsJSON: async (projectId, startDate, endDate) => {
-    const reports = await db
-      .select()
-      .from(dailyReportsTable)
-      .where(
-        and(
-          eq(dailyReportsTable.projectId, projectId),
-          gte(dailyReportsTable.createdAt, startDate),
-          lte(dailyReportsTable.createdAt, endDate)
-        )
-      )
-      .orderBy(dailyReportsTable.createdAt);
+    const reports = await DailyReport.find({
+      projectId,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    }).sort({ createdAt: 1 });
 
     return {
-      filename: `reports_${projectId}_${
-        startDate.toISOString().split("T")[0]
-      }.json`,
+      filename: `reports_${projectId}_${startDate.toISOString().split("T")[0]}.json`,
       content: JSON.stringify(reports, null, 2),
     };
   },
 
   /**
-   * Generate attendanceTable report summary (HTML/JSON)
+   * Generate attendance report summary (JSON)
    */
   generateAttendanceSummary: async (projectId, startDate, endDate) => {
-    const data = await db
-      .select({
-        workerId: attendanceTable.workerId,
-        workerName: db.sql`CONCAT(${workersTable.firstname}, ' ', ${workersTable.lastname})`,
-        totalDays: db.sql`COUNT(*)`,
-        presentDays: db.sql`COUNT(CASE WHEN ${attendanceTable.status} = 'PRESENT' THEN 1 END)`,
-        absentDays: db.sql`COUNT(CASE WHEN ${attendanceTable.status} = 'ABSENT' THEN 1 END)`,
-      })
-      .from(attendanceTable)
-      .leftJoin(workersTable, eq(attendanceTable.workerId, workersTable.id))
-      .where(
-        and(
-          eq(attendanceTable.projectId, projectId),
-          gte(attendanceTable.checkInAt, startDate),
-          lte(attendanceTable.checkInAt, endDate)
-        )
-      )
-      .groupBy(attendanceTable.workerId, workersTable.id);
+    const data = await Attendance.aggregate([
+      {
+        $match: {
+          projectId: projectId,
+          checkInAt: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "workers",
+          localField: "workerId",
+          foreignField: "_id",
+          as: "worker",
+        },
+      },
+      {
+        $unwind: "$worker",
+      },
+      {
+        $group: {
+          _id: "$workerId",
+          workerName: {
+            $first: {
+              $concat: ["$worker.firstname", " ", "$worker.lastname"],
+            },
+          },
+          totalDays: { $sum: 1 },
+          presentDays: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "PRESENT"] }, 1, 0],
+            },
+          },
+          absentDays: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "ABSENT"] }, 1, 0],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          workerId: "$_id",
+          workerName: 1,
+          totalDays: 1,
+          presentDays: 1,
+          absentDays: 1,
+          attendanceRate: {
+            $multiply: [
+              { $divide: ["$presentDays", "$totalDays"] },
+              100,
+            ],
+          },
+        },
+      },
+    ]);
 
     const summary = {
       projectId,
@@ -188,17 +218,15 @@ export const exportService = {
         start: startDate,
         end: endDate,
       },
-      workersTable: data.map((w) => ({
+      workers: data.map((w) => ({
         ...w,
-        attendanceRate: ((w.presentDays / w.totalDays) * 100).toFixed(2),
+        attendanceRate: w.attendanceRate.toFixed(2),
       })),
       generatedAt: new Date(),
     };
 
     return {
-      filename: `attendance_summary_${projectId}_${
-        startDate.toISOString().split("T")[0]
-      }.json`,
+      filename: `attendance_summary_${projectId}_${startDate.toISOString().split("T")[0]}.json`,
       content: JSON.stringify(summary, null, 2),
     };
   },
@@ -207,23 +235,33 @@ export const exportService = {
    * Generate project overview report
    */
   generateProjectReport: async (projectId) => {
-    const projectData = await db
-      .select()
-      .from(projectsTable)
-      .where(eq(projectsTable.id, projectId));
+    const project = await Project.findById(projectId);
 
-    const taskData = await db
-      .select({
-        total: db.sql`COUNT(*)`,
-        completed: db.sql`COUNT(CASE WHEN ${tasksTable.status} = 'DONE' THEN 1 END)`,
-        inProgress: db.sql`COUNT(CASE WHEN ${tasksTable.status} = 'IN_PROGRESS' THEN 1 END)`,
-      })
-      .from(tasksTable)
-      .where(eq(tasksTable.projectId, projectId));
+    const taskStats = await Task.aggregate([
+      {
+        $match: { projectId: projectId },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "DONE"] }, 1, 0],
+            },
+          },
+          inProgress: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "IN_PROGRESS"] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
 
     const report = {
-      project: projectData[0],
-      tasksTable: taskData[0],
+      project,
+      tasks: taskStats[0] || { total: 0, completed: 0, inProgress: 0 },
       generatedAt: new Date(),
     };
 
@@ -237,24 +275,50 @@ export const exportService = {
    * Export worker summary as CSV
    */
   exportWorkerSummaryCSV: async (projectId, startDate, endDate) => {
-    const data = await db
-      .select({
-        workerId: workersTable.id,
-        name: db.sql`CONCAT(${workersTable.firstname}, ' ', ${workersTable.lastname})`,
-        email: workersTable.email,
-        phone: workersTable.phone,
-        department: workersTable.department,
-      })
-      .from(workersTable)
-      .leftJoin(attendanceTable, eq(workersTable.id, attendanceTable.workerId))
-      .where(
-        and(
-          eq(attendanceTable.projectId, projectId),
-          gte(attendanceTable.checkInAt, startDate),
-          lte(attendanceTable.checkInAt, endDate)
-        )
-      )
-      .groupBy(workersTable.id);
+    const data = await Attendance.aggregate([
+      {
+        $match: {
+          projectId: projectId,
+          checkInAt: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "workers",
+          localField: "workerId",
+          foreignField: "_id",
+          as: "worker",
+        },
+      },
+      {
+        $unwind: "$worker",
+      },
+      {
+        $group: {
+          _id: "$workerId",
+          name: {
+            $first: {
+              $concat: ["$worker.firstname", " ", "$worker.lastname"],
+            },
+          },
+          email: { $first: "$worker.email" },
+          phone: { $first: "$worker.phone" },
+          department: { $first: "$worker.department" },
+        },
+      },
+      {
+        $project: {
+          workerId: "$_id",
+          name: 1,
+          email: 1,
+          phone: 1,
+          department: 1,
+        },
+      },
+    ]);
 
     const headers = ["workerId", "name", "email", "phone", "department"];
 

@@ -1,17 +1,33 @@
-import { db } from "../db/index.js";
-import { shiftsTable } from "../models/index.js";
+import { Shift } from "../models/index.js";
 
-export const createShift = (data) =>
-  db.insert(shiftsTable).values(data).returning();
+export const createShift = async (data) => {
+  const shift = new Shift(data);
+  await shift.save();
+  return shift;
+};
 
-export const getShiftsByProject = (projectId) =>
-  db.select().from(shiftsTable).where(shiftsTable.projectId.eq(projectId));
+export const getShiftsByProject = async (projectId) => {
+  const shifts = await Shift.find({ projectId }).sort({ startTime: -1 });
+  return shifts;
+};
 
-export const getShiftById = (id) =>
-  db.select().from(shiftsTable).where(shiftsTable.id.eq(id));
+export const getShiftById = async (id) => {
+  const shift = await Shift.findById(id);
+  return shift ? [shift] : [];
+};
 
-export const updateShift = (id, data) =>
-  db.update(shiftsTable).set(data).where(shiftsTable.id.eq(id)).returning();
+export const updateShift = async (id, data) => {
+  const updated = await Shift.findByIdAndUpdate(id, data, { new: true });
+  if (!updated) {
+    throw new Error("Shift not found");
+  }
+  return updated;
+};
 
-export const deleteShift = (id) =>
-  db.delete(shiftsTable).where(shiftsTable.id.eq(id));
+export const deleteShift = async (id) => {
+  const deleted = await Shift.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new Error("Shift not found");
+  }
+  return deleted;
+};

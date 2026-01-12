@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db/index.js";
-import { eventsTable } from "../models/index.js";
+import { eventService } from "../services/event.service.js";
 import { verifyToken } from "../auth/middleware.js";
 
 const router = Router();
 
 const eventSchema = z.object({
-  projectId: z.string().uuid("Invalid project ID"),
+  projectId: z.string().min(1, "Invalid project ID"),
   title: z.string().min(1, "Event title required"),
   type: z.string().optional(),
   startAt: z.string().datetime(),
@@ -20,7 +19,7 @@ const eventSchema = z.object({
 router.post("/", verifyToken, async (req, res) => {
   try {
     const validated = eventSchema.parse(req.body);
-    const [event] = await db.insert(eventsTable).values(validated).returning();
+    const event = await eventService.createEvent(validated);
     res.status(201).json(event);
   } catch (err) {
     if (err instanceof z.ZodError)
@@ -31,10 +30,7 @@ router.post("/", verifyToken, async (req, res) => {
 
 router.get("/project/:projectId", verifyToken, async (req, res) => {
   try {
-    const events = await db
-      .select()
-      .from(eventsTable)
-      .where(eventsTable.projectId.eq(req.params.projectId));
+    const events = await eventService.getProjectEvents(req.params.projectId);
     res.json(events);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -44,11 +40,7 @@ router.get("/project/:projectId", verifyToken, async (req, res) => {
 router.patch("/:id", verifyToken, async (req, res) => {
   try {
     const validated = eventSchema.partial().parse(req.body);
-    const [updated] = await db
-      .update(eventsTable)
-      .set(validated)
-      .where(eventsTable.id.eq(req.params.id))
-      .returning();
+    const updated = await eventService.updateEvent(req.params.id, validated);
     res.json(updated);
   } catch (err) {
     if (err instanceof z.ZodError)

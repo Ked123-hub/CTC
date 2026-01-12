@@ -15,19 +15,15 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.45.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "geolib": "^3.3.4",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.16.3",
+    "mongoose": "^8.0.0",
     "redis": "^4.6.13",
-    "uuid": "^13.0.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.6",
-    "drizzle-kit": "^0.31.8",
     "tsx": "^4.21.0"
   }
 }

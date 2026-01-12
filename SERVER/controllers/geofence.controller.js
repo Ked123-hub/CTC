@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { db } from "../db/index.js";
-import { projectsTable } from "../models/index.js";
+import { Project } from "../models/index.js";
 import { geofenceService } from "../services/geofence.service.js";
 import { geofenceAlertService } from "../services/geofence-alert.service.js";
-import { eq } from "drizzle-orm";
 
 // Validation schemas
 const geofenceZoneSchema = z.object({
@@ -32,9 +30,7 @@ export const geofenceController = {
    */
   updateProjectGeofence: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
       const validated = updateProjectGeofenceSchema.parse(req.body);
 
@@ -55,20 +51,27 @@ export const geofenceController = {
         }
       }
 
-      const [updated] = await db
-        .update(projectsTable)
-        .set({
+      const updated = await Project.findByIdAndUpdate(
+        projectId,
+        {
           ...validated,
           updatedAt: new Date(),
-        })
-        .where(eq(projectsTable.id, projectId))
-        .returning();
+        },
+        { new: true }
+      );
+
+      if (!updated) {
+        return res.status(404).json({
+          success: false,
+          error: "Project not found",
+        });
+      }
 
       res.status(200).json({
         success: true,
         message: "Geofence configuration updated",
         data: {
-          id: updated.id,
+          id: updated._id,
           name: updated.name,
           geofence: {
             latitude: updated.latitude,
@@ -94,15 +97,9 @@ export const geofenceController = {
    */
   getProjectGeofence: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return res.status(404).json({
@@ -114,7 +111,7 @@ export const geofenceController = {
       res.status(200).json({
         success: true,
         data: {
-          projectId: project.id,
+          projectId: project._id,
           projectName: project.name,
           location: project.location,
           primaryGeofence: {
@@ -147,18 +144,12 @@ export const geofenceController = {
    */
   addGeofenceZone: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
       const zoneData = geofenceZoneSchema.parse(req.body);
 
       // Get current project
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
@@ -178,14 +169,14 @@ export const geofenceController = {
       const updatedZones = [...existingZones, newZone];
 
       // Update project
-      const [updated] = await db
-        .update(projectsTable)
-        .set({
+      const updated = await Project.findByIdAndUpdate(
+        projectId,
+        {
           geofenceZones: updatedZones,
           updatedAt: new Date(),
-        })
-        .where(eq(projectsTable.id, projectId))
-        .returning();
+        },
+        { new: true }
+      );
 
       res.status(201).json({
         success: true,
@@ -211,11 +202,7 @@ export const geofenceController = {
     try {
       const { projectId, zoneId } = req.params;
 
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
@@ -228,13 +215,10 @@ export const geofenceController = {
         return res.status(404).json({ error: "Zone not found" });
       }
 
-      await db
-        .update(projectsTable)
-        .set({
-          geofenceZones: updatedZones,
-          updatedAt: new Date(),
-        })
-        .where(eq(projectsTable.id, projectId));
+      await Project.findByIdAndUpdate(projectId, {
+        geofenceZones: updatedZones,
+        updatedAt: new Date(),
+      });
 
       res.status(200).json({
         success: true,
@@ -254,9 +238,7 @@ export const geofenceController = {
    */
   validateLocation: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
       const { latitude, longitude } = z
         .object({
@@ -265,11 +247,7 @@ export const geofenceController = {
         })
         .parse(req.body);
 
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
@@ -299,9 +277,7 @@ export const geofenceController = {
    */
   getGeofenceStatistics: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
       const { startDate, endDate } = z
         .object({
@@ -339,9 +315,7 @@ export const geofenceController = {
    */
   checkWorkerPosition: async (req, res, next) => {
     try {
-      const { projectId } = z.object({ projectId: z.string().uuid() }).parse({
-        projectId: req.params.projectId,
-      });
+      const { projectId } = req.params;
 
       const { latitude, longitude } = z
         .object({
@@ -350,11 +324,7 @@ export const geofenceController = {
         })
         .parse(req.body);
 
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return res.status(404).json({ error: "Project not found" });

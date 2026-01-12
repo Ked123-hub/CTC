@@ -1,10 +1,4 @@
-import { db } from "../db/index.js";
-import {
-  attendanceTable,
-  workersTable,
-  projectsTable,
-} from "../models/index.js";
-import { eq } from "drizzle-orm";
+import { Attendance, Worker, Project } from "../models/index.js";
 import { redisService, getRedisClient } from "./redis.service.js";
 import { geofenceService } from "./geofence.service.js";
 import { googleMapsService } from "./google-maps.service.js";
@@ -47,18 +41,10 @@ export const locationTrackingService = {
       );
 
       // Get project details for geofence monitoring
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       // Get worker details for alerts
-      const [worker] = await db
-        .select()
-        .from(workersTable)
-        .where(eq(workersTable.id, workerId))
-        .limit(1);
+      const worker = await Worker.findById(workerId);
 
       // Check for boundary crossings and generate alerts
       let alertsResult = null;
@@ -80,14 +66,14 @@ export const locationTrackingService = {
       }
 
       // Also store in database for history
-      await db
-        .update(attendanceTable)
-        .set({
+      await Attendance.updateMany(
+        { workerId },
+        {
           checkOutLat: latitude.toString(),
           checkOutLng: longitude.toString(),
           updatedAt: new Date(),
-        })
-        .where(eq(attendanceTable.workerId, workerId));
+        }
+      );
 
       return {
         success: true,
@@ -113,17 +99,9 @@ export const locationTrackingService = {
       // Enrich with worker details from database
       const enrichedWorkers = await Promise.all(
         activeWorkers.map(async (activeWorker) => {
-          const [workerData] = await db
-            .select({
-              firstname: workersTable.firstname,
-              lastname: workersTable.lastname,
-              email: workersTable.email,
-              phone: workersTable.phone,
-              role: workersTable.role,
-              department: workersTable.department,
-            })
-            .from(workersTable)
-            .where(eq(workersTable.id, activeWorker.workerId));
+          const workerData = await Worker.findById(activeWorker.workerId).select(
+            'firstname lastname email phone role department'
+          );
 
           return {
             ...activeWorker,
@@ -185,11 +163,7 @@ export const locationTrackingService = {
   ) => {
     try {
       // Fetch project from DB
-      const [project] = await db
-        .select()
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
+      const project = await Project.findById(projectId);
 
       if (!project) {
         return {
@@ -332,11 +306,11 @@ export const locationTrackingService = {
     try {
       const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
-      const records = await db.select().from(attendanceTable).where(
-        eq(attendanceTable.workerId, workerId),
-        eq(attendanceTable.projectId, projectId)
-        // Add createdAt filter (you may need to adjust based on your schema)
-      );
+      const records = await Attendance.find({
+        workerId,
+        projectId,
+        checkInAt: { $gte: since }
+      }).sort({ checkInAt: -1 });
 
       return records.map((r) => ({
         checkInAt: r.checkInAt,

@@ -1,18 +1,17 @@
-import { db } from "../db/index.js";
-import { leaveRequestsTable } from "../models/index.js";
+import { LeaveRequest } from "../models/index.js";
 
-export const createLeaveRequest = (data) =>
-  db.insert(leaveRequestsTable).values(data).returning();
+export const createLeaveRequest = async (data) => {
+  const leaveRequest = new LeaveRequest(data);
+  await leaveRequest.save();
+  return leaveRequest;
+};
 
-export const getWorkerLeaves = (workerId) =>
-  db
-    .select()
-    .from(leaveRequestsTable)
-    .where(leaveRequestsTable.workerId.eq(workerId));
+export const getWorkerLeaves = async (workerId) => {
+  const leaves = await LeaveRequest.find({ workerId }).sort({ createdAt: -1 });
+  return leaves;
+};
 
-export const updateLeaveStatus = (id, status, approvedBy) =>
-  db
-    .update(leaveRequestsTable)
-    .set({ status, approvedBy, approvedAt: new Date() })
-    .where(leaveRequestsTable.id.eq(id))
-    .returning();
+export const getAllLeaveRequests = async () => {
+  const leaves = await LeaveRequest.find().sort({ createdAt: -1 });
+  return leaves;
+};

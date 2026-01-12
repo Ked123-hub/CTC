@@ -1,18 +1,19 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { eq } from "drizzle-orm";
-import { db } from "../db/index.js";
-import { workersTable } from "../models/index.js";
+import { Worker } from "../models/index.js";
 
-export const hashPassword = (password) => bcrypt.hash(password, 10);
+export const hashPassword = async (password) => {
+  return await bcrypt.hash(password, 10);
+};
 
-export const verifyPassword = (password, hash) =>
-  bcrypt.compare(password, hash ?? "");
+export const verifyPassword = async (password, hash) => {
+  return await bcrypt.compare(password, hash ?? "");
+};
 
 export const signWorkerToken = (worker) =>
   jwt.sign(
     {
-      sub: worker.id,
+      sub: worker._id.toString(),
       email: worker.email,
       firstname: worker.firstname,
       lastname: worker.lastname,
@@ -22,8 +23,23 @@ export const signWorkerToken = (worker) =>
     { expiresIn: "12h" }
   );
 
-export const createWorker = (values) =>
-  db.insert(workersTable).values(values).returning();
+export const createWorker = async (values) => {
+  const worker = new Worker(values);
+  return await worker.save();
+};
 
-export const findWorkerByEmail = (email) =>
-  db.select().from(workersTable).where(eq(workersTable.email, email));
+export const findWorkerByEmail = async (email) => {
+  return await Worker.findOne({ email }).select('+passwordHash');
+};
+
+export const findWorkerById = async (id) => {
+  return await Worker.findById(id);
+};
+
+export const updateWorkerLastLogin = async (workerId) => {
+  return await Worker.findByIdAndUpdate(
+    workerId,
+    { lastLogin: new Date() },
+    { new: true }
+  );
+};

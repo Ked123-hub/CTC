@@ -1,79 +1,42 @@
-import { db } from "../db/index.js";
-import { workersTable } from "../models/index.js";
+import { Worker } from "../models/index.js";
 
-// #region agent log
-const logDebug = (location, message, data) => {
-  fetch("http://127.0.0.1:7242/ingest/51d8f5a9-8cae-46e5-ba4d-366eec339780", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-    }),
-  }).catch(() => {});
+export const createWorker = async (data) => {
+  const worker = new Worker(data);
+  await worker.save();
+  return worker;
 };
-// #endregion
 
-export const createWorker = (data) =>
-  db.insert(workersTable).values(data).returning();
-
-export const getAllWorkers = () => db.select().from(workersTable);
+export const getAllWorkers = async () => {
+  const workers = await Worker.find().sort({ createdAt: -1 });
+  return workers;
+};
 
 export const getWorkerById = async (id) => {
-  // #region agent log
-  logDebug("worker.service.js:10", "getWorkerById called", {
-    id,
-    hypothesisId: "A",
-  });
-  // #endregion
-  try {
-    // #region agent log
-    logDebug("worker.service.js:13", "Before database query", {
-      id,
-      queryType: "select",
-      hypothesisId: "A",
-    });
-    // #endregion
-    const result = await db
-      .select()
-      .from(workersTable)
-      .where(workersTable.id.eq(id));
-    // #region agent log
-    logDebug("worker.service.js:16", "After database query", {
-      id,
-      resultCount: result?.length,
-      firstResult: result?.[0]
-        ? { id: result[0].id, firstname: result[0].firstname }
-        : null,
-      hypothesisId: "A",
-    });
-    // #endregion
-    return result;
-  } catch (error) {
-    // #region agent log
-    logDebug("worker.service.js:20", "Database query error", {
-      id,
-      errorMessage: error.message,
-      errorStack: error.stack,
-      hypothesisId: "A",
-    });
-    // #endregion
-    throw error;
-  }
+  const worker = await Worker.findById(id);
+  return worker ? [worker] : [];
 };
 
-export const getWorkerByEmail = (email) =>
-  db.select().from(workersTable).where(workersTable.email.eq(email));
+export const getWorkerByEmail = async (email) => {
+  const worker = await Worker.findOne({ email });
+  return worker ? [worker] : [];
+};
 
-export const updateWorker = (id, data) =>
-  db
-    .update(workersTable)
-    .set({ ...data, updatedAt: new Date() })
-    .where(workersTable.id.eq(id))
-    .returning();
+export const updateWorker = async (id, data) => {
+  const updated = await Worker.findByIdAndUpdate(
+    id,
+    { ...data, updatedAt: new Date() },
+    { new: true }
+  );
+  if (!updated) {
+    throw new Error("Worker not found");
+  }
+  return updated;
+};
 
-export const deleteWorker = (id) =>
-  db.delete(workersTable).where(workersTable.id.eq(id));
+export const deleteWorker = async (id) => {
+  const deleted = await Worker.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new Error("Worker not found");
+  }
+  return deleted;
+};

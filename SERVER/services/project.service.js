@@ -1,21 +1,37 @@
-import { db } from "../db/index.js";
-import { projectsTable } from "../models/index.js";
-import { eq } from "drizzle-orm";
+import { Project } from "../models/index.js";
 
-export const createProject = (data) =>
-  db.insert(projectsTable).values(data).returning();
+export const createProject = async (data) => {
+  const project = new Project(data);
+  await project.save();
+  return project;
+};
 
-export const getAllProjects = () => db.select().from(projectsTable);
+export const getAllProjects = async () => {
+  const projects = await Project.find().sort({ createdAt: -1 });
+  return projects;
+};
 
-export const getProjectById = (id) =>
-  db.select().from(projectsTable).where(eq(projectsTable.id, id));
+export const getProjectById = async (id) => {
+  const project = await Project.findById(id);
+  return project;
+};
 
-export const updateProject = (id, data) =>
-  db
-    .update(projectsTable)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(projectsTable.id, id))
-    .returning();
+export const updateProject = async (id, data) => {
+  const updated = await Project.findByIdAndUpdate(
+    id,
+    { ...data, updatedAt: new Date() },
+    { new: true }
+  );
+  if (!updated) {
+    throw new Error("Project not found");
+  }
+  return updated;
+};
 
-export const deleteProject = (id) =>
-  db.delete(projectsTable).where(eq(projectsTable.id, id));
+export const deleteProject = async (id) => {
+  const deleted = await Project.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new Error("Project not found");
+  }
+  return deleted;
+};

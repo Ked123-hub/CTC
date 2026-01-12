@@ -1,7 +1,5 @@
-import { db } from "../db/index.js";
-import { notificationsTable } from "../models/notification.model.js";
+import { Notification } from "../models/index.js";
 import { geofenceService } from "./geofence.service.js";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
 
 /**
  * Geofence Alert Service
@@ -106,29 +104,29 @@ export const geofenceAlertService = {
         : `${workerName} has entered ${crossing.zoneName}`;
 
     try {
-      const [notification] = await db
-        .insert(notificationsTable)
-        .values({
-          workerId,
-          type: "GEOFENCE_ALERT",
-          payload: JSON.stringify({
-            title,
-            message,
-            eventType: crossing.eventType,
-            zoneName: crossing.zoneName,
-            zoneId: crossing.zoneId,
-            previousDistance: crossing.previousDistance,
-            currentDistance: crossing.currentDistance,
-            projectId: project.id,
-            projectName: project.name,
-            severity,
-            timestamp: crossing.timestamp,
-          }),
-        })
-        .returning();
+      const notification = new Notification({
+        workerId,
+        type: "GEOFENCE_ALERT",
+        payload: {
+          title,
+          message,
+          eventType: crossing.eventType,
+          zoneName: crossing.zoneName,
+          zoneId: crossing.zoneId,
+          previousDistance: crossing.previousDistance,
+          currentDistance: crossing.currentDistance,
+          projectId: project._id,
+          projectName: project.name,
+          severity,
+          timestamp: crossing.timestamp,
+        },
+        sentAt: new Date(),
+      });
+
+      await notification.save();
 
       return {
-        ...notification,
+        ...notification.toObject(),
         crossing,
         severity,
       };
@@ -148,25 +146,24 @@ export const geofenceAlertService = {
     project
   ) => {
     try {
-      const [notification] = await db
-        .insert(notificationsTable)
-        .values({
-          workerId,
-          type: "GEOFENCE_ALERT",
-          payload: JSON.stringify({
-            title: "❌ Check-In Location Invalid",
-            message: `Check-in denied for ${project.name}. ${
-              geofenceValidation.reason
-            }. ${geofenceValidation.suggestion || ""}`,
-            eventType: "CHECK_IN_DENIED",
-            projectId: project.id,
-            projectName: project.name,
-            validation: geofenceValidation,
-            timestamp: new Date().toISOString(),
-          }),
-        })
-        .returning();
+      const notification = new Notification({
+        workerId,
+        type: "GEOFENCE_ALERT",
+        payload: {
+          title: "❌ Check-In Location Invalid",
+          message: `Check-in denied for ${project.name}. ${
+            geofenceValidation.reason
+          }. ${geofenceValidation.suggestion || ""}`,
+          eventType: "CHECK_IN_DENIED",
+          projectId: project._id,
+          projectName: project.name,
+          validation: geofenceValidation,
+          timestamp: new Date().toISOString(),
+        },
+        sentAt: new Date(),
+      });
 
+      await notification.save();
       return notification;
     } catch (error) {
       console.error("Failed to create check-in denied alert:", error);
@@ -202,32 +199,26 @@ export const geofenceAlertService = {
    */
   getBreachStatistics: async (projectId, startDate, endDate) => {
     // Query notifications table for geofence alerts
-    const alerts = await db
-      .select()
-      .from(notificationsTable)
-      .where(
-        and(
-          eq(notificationsTable.type, "GEOFENCE_ALERT"),
-          gte(notificationsTable.sentAt, startDate),
-          lte(notificationsTable.sentAt, endDate)
-        )
-      );
+    const alerts = await Notification.find({
+      type: "GEOFENCE_ALERT",
+      sentAt: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    });
 
     const exitEvents = alerts.filter((a) => {
-      const payload = JSON.parse(a.payload || "{}");
-      return payload.eventType === "EXIT" && payload.projectId === projectId;
+      return a.payload.eventType === "EXIT" && a.payload.projectId.toString() === projectId;
     });
 
     const entryEvents = alerts.filter((a) => {
-      const payload = JSON.parse(a.payload || "{}");
-      return payload.eventType === "ENTRY" && payload.projectId === projectId;
+      return a.payload.eventType === "ENTRY" && a.payload.projectId.toString() === projectId;
     });
 
     const deniedCheckIns = alerts.filter((a) => {
-      const payload = JSON.parse(a.payload || "{}");
       return (
-        payload.eventType === "CHECK_IN_DENIED" &&
-        payload.projectId === projectId
+        a.payload.eventType === "CHECK_IN_DENIED" &&
+        a.payload.projectId.toString() === projectId
       );
     });
 
@@ -259,16 +250,11 @@ export const geofenceAlertService = {
    * Get active alerts for a worker
    */
   getActiveAlertsForWorker: async (workerId, limit = 10) => {
-    const alerts = await db
-      .select()
-      .from(notificationsTable)
-      .where(
-        and(
-          eq(notificationsTable.workerId, workerId),
-          eq(notificationsTable.type, "GEOFENCE_ALERT")
-        )
-      )
-      .orderBy(desc(notificationsTable.sentAt))
+    const alerts = await Notification.find({
+      workerId,
+      type: "GEOFENCE_ALERT",
+    })
+      .sort({ sentAt: -1 })
       .limit(limit);
 
     return alerts;

@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db/index.js";
-import { shiftsTable } from "../models/index.js";
+import { shiftService } from "../services/shift.service.js";
 import { verifyToken } from "../auth/middleware.js";
 
 const router = Router();
 
 const shiftSchema = z.object({
-  projectId: z.string().uuid("Invalid project ID"),
+  projectId: z.string().min(1, "Invalid project ID"),
   name: z.string().min(1, "Shift name required"),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
@@ -17,7 +16,7 @@ const shiftSchema = z.object({
 router.post("/", verifyToken, async (req, res) => {
   try {
     const validated = shiftSchema.parse(req.body);
-    const [shift] = await db.insert(shiftsTable).values(validated).returning();
+    const shift = await shiftService.createShift(validated);
     res.status(201).json(shift);
   } catch (err) {
     if (err instanceof z.ZodError)
@@ -28,10 +27,7 @@ router.post("/", verifyToken, async (req, res) => {
 
 router.get("/project/:projectId", verifyToken, async (req, res) => {
   try {
-    const shifts = await db
-      .select()
-      .from(shiftsTable)
-      .where(shiftsTable.projectId.eq(req.params.projectId));
+    const shifts = await shiftService.getShiftsByProject(req.params.projectId);
     res.json(shifts);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -40,12 +36,9 @@ router.get("/project/:projectId", verifyToken, async (req, res) => {
 
 router.get("/:id", verifyToken, async (req, res) => {
   try {
-    const [shift] = await db
-      .select()
-      .from(shiftsTable)
-      .where(shiftsTable.id.eq(req.params.id));
-    if (!shift) return res.status(404).json({ error: "Shift not found" });
-    res.json(shift);
+    const shifts = await shiftService.getShiftById(req.params.id);
+    if (shifts.length === 0) return res.status(404).json({ error: "Shift not found" });
+    res.json(shifts[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -54,12 +47,8 @@ router.get("/:id", verifyToken, async (req, res) => {
 router.patch("/:id", verifyToken, async (req, res) => {
   try {
     const validated = shiftSchema.partial().parse(req.body);
-    const [updated] = await db
-      .update(shiftsTable)
-      .set(validated)
-      .where(shiftsTable.id.eq(req.params.id))
-      .returning();
-    res.json(updated);
+    const shift = await shiftService.updateShift(req.params.id, validated);
+    res.json(shift);
   } catch (err) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
@@ -69,7 +58,7 @@ router.patch("/:id", verifyToken, async (req, res) => {
 
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
-    await db.delete(shiftsTable).where(shiftsTable.id.eq(req.params.id));
+    await shiftService.deleteShift(req.params.id);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });

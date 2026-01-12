@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db/index.js";
-import { leaveRequestsTable } from "../models/index.js";
+import { leaveService } from "../services/leave.service.js";
 import { verifyToken } from "../auth/middleware.js";
-import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -19,7 +17,7 @@ const leaveSchema = z.object({
 // GET all leave requests
 router.get("/", verifyToken, async (req, res) => {
   try {
-    const leaves = await db.select().from(leaveRequestsTable);
+    const leaves = await leaveService.getAllLeaveRequests();
     res.json(leaves);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -29,10 +27,7 @@ router.get("/", verifyToken, async (req, res) => {
 router.post("/", verifyToken, async (req, res) => {
   try {
     const validated = leaveSchema.parse(req.body);
-    const [leave] = await db
-      .insert(leaveRequestsTable)
-      .values(validated)
-      .returning();
+    const leave = await leaveService.createLeaveRequest(validated);
     res.status(201).json(leave);
   } catch (err) {
     if (err instanceof z.ZodError)
@@ -43,10 +38,7 @@ router.post("/", verifyToken, async (req, res) => {
 
 router.get("/worker/:workerId", verifyToken, async (req, res) => {
   try {
-    const leaves = await db
-      .select()
-      .from(leaveRequestsTable)
-      .where(eq(leaveRequestsTable.workerId, req.params.workerId));
+    const leaves = await leaveService.getWorkerLeaves(req.params.workerId);
     res.json(leaves);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -56,14 +48,7 @@ router.get("/worker/:workerId", verifyToken, async (req, res) => {
 // Approve leave request
 router.put("/:id/approve", verifyToken, async (req, res) => {
   try {
-    const [updated] = await db
-      .update(leaveRequestsTable)
-      .set({ status: "APPROVED", approvedAt: new Date() })
-      .where(eq(leaveRequestsTable.id, req.params.id))
-      .returning();
-    if (!updated) {
-      return res.status(404).json({ error: "Leave request not found" });
-    }
+    const updated = await leaveService.updateLeaveStatus(req.params.id, "APPROVED", req.user?.id);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -74,14 +59,7 @@ router.put("/:id/approve", verifyToken, async (req, res) => {
 router.put("/:id/reject", verifyToken, async (req, res) => {
   try {
     const { reason } = req.body;
-    const [updated] = await db
-      .update(leaveRequestsTable)
-      .set({ status: "REJECTED", rejectionReason: reason })
-      .where(eq(leaveRequestsTable.id, req.params.id))
-      .returning();
-    if (!updated) {
-      return res.status(404).json({ error: "Leave request not found" });
-    }
+    const updated = await leaveService.updateLeaveStatus(req.params.id, "REJECTED", req.user?.id);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -91,11 +69,7 @@ router.put("/:id/reject", verifyToken, async (req, res) => {
 router.patch("/:id", verifyToken, async (req, res) => {
   try {
     const validated = leaveSchema.partial().parse(req.body);
-    const [updated] = await db
-      .update(leaveRequestsTable)
-      .set({ ...validated, approvedAt: new Date() })
-      .where(eq(leaveRequestsTable.id, req.params.id))
-      .returning();
+    const updated = await leaveService.updateLeaveStatus(req.params.id, validated.status, req.user?.id);
     res.json(updated);
   } catch (err) {
     if (err instanceof z.ZodError)

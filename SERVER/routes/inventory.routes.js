@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db/index.js";
-import { inventoryTable, inventoryLogsTable } from "../models/index.js";
+import { inventoryService } from "../services/inventory.service.js";
 import { verifyToken } from "../auth/middleware.js";
 
 const router = Router();
 
 const inventorySchema = z.object({
-  projectId: z.string().uuid("Invalid project ID"),
+  projectId: z.string().min(1, "Invalid project ID"),
   itemName: z.string().min(1, "Item name required"),
   category: z.string().optional(),
   quantityAvailable: z.number().int().min(0),
@@ -16,7 +15,7 @@ const inventorySchema = z.object({
 });
 
 const logSchema = z.object({
-  inventoryId: z.string().uuid("Invalid inventory ID"),
+  inventoryId: z.string().min(1, "Invalid inventory ID"),
   changeQty: z.number().int(),
   reason: z.string().optional(),
 });
@@ -24,10 +23,7 @@ const logSchema = z.object({
 router.post("/", verifyToken, async (req, res) => {
   try {
     const validated = inventorySchema.parse(req.body);
-    const [item] = await db
-      .insert(inventoryTable)
-      .values(validated)
-      .returning();
+    const item = await inventoryService.createInventoryItem(validated);
     res.status(201).json(item);
   } catch (err) {
     if (err instanceof z.ZodError)
@@ -38,10 +34,7 @@ router.post("/", verifyToken, async (req, res) => {
 
 router.get("/project/:projectId", verifyToken, async (req, res) => {
   try {
-    const items = await db
-      .select()
-      .from(inventoryTable)
-      .where(inventoryTable.projectId.eq(req.params.projectId));
+    const items = await inventoryService.getProjectInventory(req.params.projectId);
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -51,10 +44,7 @@ router.get("/project/:projectId", verifyToken, async (req, res) => {
 router.post("/logs", verifyToken, async (req, res) => {
   try {
     const validated = logSchema.parse(req.body);
-    const [log] = await db
-      .insert(inventoryLogsTable)
-      .values({ ...validated, workerId: req.worker.sub })
-      .returning();
+    const log = await inventoryService.logInventoryChange(validated, req.worker?.sub);
     res.status(201).json(log);
   } catch (err) {
     if (err instanceof z.ZodError)

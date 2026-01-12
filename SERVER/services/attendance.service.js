@@ -1,15 +1,9 @@
-import { db } from "../db/index.js";
-import { attendanceTable, projectsTable } from "../models/index.js";
+import { Attendance, Project } from "../models/index.js";
 import { geofenceService } from "./geofence.service.js";
-import { eq } from "drizzle-orm";
 
 export const checkInWorker = async (data) => {
   // Get project details including geofence configuration
-  const [project] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, data.projectId))
-    .limit(1);
+  const project = await Project.findById(data.projectId);
 
   if (!project) {
     throw new Error("Project not found");
@@ -34,22 +28,19 @@ export const checkInWorker = async (data) => {
   }
 
   // Proceed with check-in
-  const [record] = await db
-    .insert(attendanceTable)
-    .values({
-      ...data,
-      checkInAt: new Date(),
-      geofenceValidation: geofenceValidation
-        ? JSON.stringify(geofenceValidation)
-        : null,
-    })
-    .returning();
+  const record = new Attendance({
+    ...data,
+    checkInAt: new Date(),
+    geofenceValidation: geofenceValidation || null,
+  });
+
+  await record.save();
 
   return {
-    ...record,
+    ...record.toObject(),
     geofenceValidation,
     project: {
-      id: project.id,
+      id: project._id,
       name: project.name,
       location: project.location,
     },
@@ -57,31 +48,30 @@ export const checkInWorker = async (data) => {
 };
 
 export const checkOutWorker = async (id, checkOutLat, checkOutLng) => {
-  const [updated] = await db
-    .update(attendanceTable)
-    .set({
+  const updated = await Attendance.findByIdAndUpdate(
+    id,
+    {
       checkOutAt: new Date(),
       checkOutLat,
       checkOutLng,
       status: "PRESENT",
-    })
-    .where(eq(attendanceTable.id, id))
-    .returning();
+    },
+    { new: true }
+  );
+
+  if (!updated) {
+    throw new Error("Attendance record not found");
+  }
+
   return updated;
 };
 
 export const getWorkerAttendance = async (workerId) => {
-  const records = await db
-    .select()
-    .from(attendanceTable)
-    .where(eq(attendanceTable.workerId, workerId));
+  const records = await Attendance.find({ workerId }).sort({ checkInAt: -1 });
   return records;
 };
 
 export const getProjectAttendance = async (projectId) => {
-  const records = await db
-    .select()
-    .from(attendanceTable)
-    .where(eq(attendanceTable.projectId, projectId));
+  const records = await Attendance.find({ projectId }).sort({ checkInAt: -1 });
   return records;
 };

@@ -1,39 +1,81 @@
-import {
-  pgEnum,
-  pgTable,
-  uuid,
-  varchar,
-  timestamp,
-  jsonb,
-} from "drizzle-orm/pg-core";
+import mongoose from "mongoose";
 
-export const rolesEnum = pgEnum("roles", [
-  "ADMIN",
-  "MANAGER",
-  "WORKER",
-  "VOLUNTEER",
-  "VERIFICATION_OFFICER",
-]);
+const { Schema } = mongoose;
 
-export const workersTable = pgTable("workers", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  firstname: varchar("firstname", { length: 55 }).notNull(),
-  lastname: varchar("lastname", { length: 55 }).notNull(),
-  passwordHash: varchar("password_hash", { length: 255 }),
-
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  phone: varchar("phone", { length: 20 }).notNull().unique(),
-
-  role: rolesEnum("role").notNull().default("WORKER"),
-
-  department: varchar("department", { length: 100 }),
-  status: varchar("status", { length: 50 }).notNull().default("ACTIVE"),
-  profilePictureUrl: varchar("profile_picture_url", { length: 255 }),
-
-  skills: jsonb("skills").default("{}"),
-  // ["Sorting", "Collection", "Awareness"]
-
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  lastLogin: timestamp("last_login"),
+const workerSchema = new Schema({
+  firstname: {
+    type: String,
+    required: true,
+    maxlength: 55,
+    trim: true
+  },
+  lastname: {
+    type: String,
+    required: true,
+    maxlength: 55,
+    trim: true
+  },
+  passwordHash: {
+    type: String,
+    maxlength: 255
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    maxlength: 255,
+    lowercase: true,
+    trim: true
+  },
+  phone: {
+    type: String,
+    required: true,
+    unique: true,
+    maxlength: 20,
+    trim: true
+  },
+  role: {
+    type: String,
+    enum: ["ADMIN", "MANAGER", "WORKER", "VOLUNTEER", "VERIFICATION_OFFICER"],
+    default: "WORKER",
+    required: true
+  },
+  department: {
+    type: String,
+    maxlength: 100,
+    trim: true
+  },
+  status: {
+    type: String,
+    enum: ["ACTIVE", "INACTIVE", "SUSPENDED"],
+    default: "ACTIVE",
+    required: true
+  },
+  profilePictureUrl: {
+    type: String,
+    maxlength: 255
+  },
+  skills: {
+    type: [String],
+    default: []
+  }
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
+
+// Add virtual for full name
+workerSchema.virtual('fullName').get(function() {
+  return `${this.firstname} ${this.lastname}`;
+});
+
+// Add index for common queries
+workerSchema.index({ email: 1 });
+workerSchema.index({ phone: 1 });
+workerSchema.index({ role: 1, status: 1 });
+workerSchema.index({ skills: 1 });
+
+const Worker = mongoose.model('Worker', workerSchema);
+
+export default Worker;

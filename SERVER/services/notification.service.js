@@ -1,114 +1,91 @@
-import { db } from "../db/index.js";
-import { notificationsTable, workersTable } from "../models/index.js";
-import { eq, and, desc } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
+import { Notification } from "../models/index.js";
 
 export const notificationService = {
   /**
    * Create a notification
    */
   createNotification: async (workerId, type, payload) => {
-    const notification = await db.insert(notificationsTable).values({
-      id: uuidv4(),
+    const notification = new Notification({
       workerId,
       type,
       payload,
-      // use readAt column; null = unread
       readAt: null,
       sentAt: new Date(),
     });
 
+    await notification.save();
     return notification;
   },
 
   /**
-   * Get notificationsTable for a worker
+   * Get notifications for a worker
    */
   getNotifications: async (workerId, isRead = null, limit = 20, offset = 0) => {
-    const whereConditions = [eq(notificationsTable.workerId, workerId)];
+    const query = { workerId };
 
     if (isRead !== null) {
       if (isRead) {
-        whereConditions.push(db.sql`${notificationsTable.readAt} IS NOT NULL`);
+        query.readAt = { $ne: null };
       } else {
-        whereConditions.push(db.sql`${notificationsTable.readAt} IS NULL`);
+        query.readAt = null;
       }
     }
 
-    const notificationList = await db
-      .select()
-      .from(notificationsTable)
-      .where(and(...whereConditions))
-      .orderBy(desc(notificationsTable.sentAt))
+    const notifications = await Notification.find(query)
+      .sort({ sentAt: -1 })
       .limit(limit)
-      .offset(offset);
+      .skip(offset);
 
-    return notificationList;
+    return notifications;
   },
 
   /**
    * Mark notification as read
    */
   markAsRead: async (notificationId) => {
-    await db
-      .update(notificationsTable)
-      .set({ readAt: new Date() })
-      .where(eq(notificationsTable.id, notificationId));
+    await Notification.findByIdAndUpdate(notificationId, { readAt: new Date() });
   },
 
   /**
-   * Mark all notificationsTable as read
+   * Mark all notifications as read
    */
   markAllAsRead: async (workerId) => {
-    await db
-      .update(notificationsTable)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsTable.workerId, workerId),
-          db.sql`${notificationsTable.readAt} IS NULL`
-        )
-      );
+    await Notification.updateMany(
+      { workerId, readAt: null },
+      { readAt: new Date() }
+    );
   },
 
   /**
    * Get unread count
    */
   getUnreadCount: async (workerId) => {
-    const result = await db
-      .select({ count: notificationsTable.id })
-      .from(notificationsTable)
-      .where(
-        and(
-          eq(notificationsTable.workerId, workerId),
-          db.sql`${notificationsTable.readAt} IS NULL`
-        )
-      );
+    const count = await Notification.countDocuments({
+      workerId,
+      readAt: null,
+    });
 
-    return result[0]?.count || 0;
+    return count;
   },
 
   /**
    * Get count of pending story requests (unread)
    */
   getStoryRequestCount: async () => {
-    const result = await db
-      .select({ count: db.sql`COUNT(*)` })
-      .from(notificationsTable)
-      .where(
-        db.sql`${notificationsTable.type} = 'GENERAL' AND ${notificationsTable.payload} ->> 'category' = 'STORY_REQUEST' AND ${notificationsTable.readAt} IS NULL`
-      );
+    const count = await Notification.countDocuments({
+      type: "GENERAL",
+      "payload.category": "STORY_REQUEST",
+      readAt: null,
+    });
 
-    return result[0]?.count || 0;
+    return count;
   },
 
   /**
    * Delete notification
    */
   deleteNotification: async (notificationId) => {
-    await db
-      .delete(notificationsTable)
-      .where(eq(notificationsTable.id, notificationId));
+    await Notification.findByIdAndDelete(notificationId);
   },
 
   /**
@@ -163,17 +140,15 @@ export const notificationService = {
    * Broadcast notification to multiple workers
    */
   broadcastNotification: async (workerIds, type, payload) => {
-    const notificationList = workerIds.map((workerId) => ({
-      id: uuidv4(),
+    const notifications = workerIds.map((workerId) => ({
       workerId,
       type,
       payload,
-      isRead: false,
+      readAt: null,
       sentAt: new Date(),
     }));
 
-    await db.insert(notificationsTable).values(notificationList);
-
-    return notificationList;
+    const createdNotifications = await Notification.insertMany(notifications);
+    return createdNotifications;
   },
 };
