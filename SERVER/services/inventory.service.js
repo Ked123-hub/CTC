@@ -36,3 +36,11 @@ export const getInventoryLogs = async (inventoryId) => {
 
   return inventoryItem.logs;
 };
+
+// Export all functions as a service object
+export const inventoryService = {
+  createInventoryItem,
+  getProjectInventory,
+  logInventoryChange,
+  getInventoryLogs,
+};

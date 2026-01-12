@@ -26,3 +26,11 @@ export const deleteEvent = async (id) => {
   }
   return deleted;
 };
+
+// Export all functions as a service object
+export const eventService = {
+  createEvent,
+  getProjectEvents,
+  updateEvent,
+  deleteEvent,
+};

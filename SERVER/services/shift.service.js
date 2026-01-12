@@ -31,3 +31,12 @@ export const deleteShift = async (id) => {
   }
   return deleted;
 };
+
+// Export all functions as a service object
+export const shiftService = {
+  createShift,
+  getShiftsByProject,
+  getShiftById,
+  updateShift,
+  deleteShift,
+};
